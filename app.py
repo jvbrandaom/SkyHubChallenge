@@ -3,13 +3,12 @@ from PIL import Image
 import io
 from pymongo import MongoClient
 from flask import Flask, jsonify
-from flask import send_from_directory
 from flask import send_file
-
+from bson.json_util import dumps
 import SkyHub
 
 app = Flask("SkyHubChallenge")
-app_url = "http://127.0.0.1:5000/"
+
 db = MongoClient().skyhub
 fs = gridfs.GridFS(db)
 
@@ -20,10 +19,15 @@ def hello_world():
 
 
 @app.route("/images/<image_name>")
-def images(image_name):
+def image(image_name):
     image_stream = fs.get_last_version(filename=image_name)
     image = Image.open(image_stream)
     return serve_pil_image(image)
+
+
+@app.route("/images/")
+def images():
+    return dumps(db.images.find())
 
 
 def serve_pil_image(pil_img):
@@ -33,6 +37,5 @@ def serve_pil_image(pil_img):
     return send_file(img_io, mimetype='image/jpeg')
 
 if __name__ == '__main__':
-
     SkyHub.write_images_to_db(db)
     app.run()
