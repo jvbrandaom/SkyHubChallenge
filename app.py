@@ -27,7 +27,12 @@ def image(image_name):
 
 @app.route("/images/")
 def images():
-    return dumps(db.images.find())
+    image_list = []
+    for image_entry in db.images.find():
+        del image_entry["_id"]
+        image_list.append(image_entry)
+
+    return jsonify(image_list)
 
 
 def serve_pil_image(pil_img):
