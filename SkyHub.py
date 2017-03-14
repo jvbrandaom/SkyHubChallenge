@@ -1,64 +1,76 @@
 from io import BytesIO
 import io
+import PIL
 import requests
-import os
 from PIL import Image
 import gridfs
+from pymongo import MongoClient
 
-small = 320, 320
-medium = 384, 288
-large = 640, 480
+small_dimension = 320, 320
+medium_dimension = 384, 288
+large_dimension = 640, 480
+small_str = "small"
+medium_str = "medium"
+large_str = "large"
 images_path = "images/"
 app_url = "http://127.0.0.1:5000/"
+db = MongoClient().skyhub
+fs = gridfs.GridFS(db)
 
 
 def get_images_urls():
     response = requests.get("http://54.152.221.29/images.json")
     data = response.json()
     image_urls = [image_url['url'] for image_url in data['images']]
-
     return image_urls
 
 
-def write_images_to_disk():
-    urls = get_images_urls()
-    i = 0
-    for image_url in urls:
-        image = requests.get(image_url)
-        file = open(images_path + "image" + str(i) + ".jpg", 'wb')
-        file.write(image.content)
-        i += 1
+def write_image_to_db(image, filename):
+    fs.put(image, filename=filename, contentType="image/jpeg")
 
 
-def write_images_to_db(db):
+def write_images_to_db():
     urls = get_images_urls()
-    fs = gridfs.GridFS(db)
     i = 0
     for image_url in urls:
         image = requests.get(image_url)
         filename = "image" + str(i)
-        small_filename = filename + "_small"
-        medium_filename = filename + "_medium"
-        large_filename = filename + "_large"
-        fs.put(image.content, filename=filename, contentType="image/jpeg")
-        resize_image(db, image.content, small, small_filename)
-        resize_image(db, image.content, medium, medium_filename)
-        resize_image(db, image.content, medium, large_filename)
-        save_image_info(db, filename, small_filename, medium_filename, large_filename)
+        write_image_to_db(image.content, filename)
+        resized_images = generate_resized_images(image.content)
+        save_resized_images(resized_images, filename)
+        save_image_info(filename)
         i += 1
 
 
-def resize_image(db, image_content, size, filename):
-    fs = gridfs.GridFS(db)
-    image_small = Image.open(BytesIO(image_content))
-    image_small.thumbnail(size)
+def generate_resized_images(image):
+    images = {small_str: resize_image(image, small_dimension),
+              medium_str: resize_image(image, medium_dimension),
+              large_str: resize_image(image, large_dimension)}
+    return images
+
+
+def resize_image(image_content, size):
+    image = Image.open(BytesIO(image_content))
+    return image.resize(size, PIL.Image.BICUBIC)
+
+
+def save_resized_images(images, original_filename):
+    for size_str, image in images.items():
+        filename = generate_filename(original_filename, size_str)
+        save_resized_image(image, filename)
+
+
+def save_resized_image(resized_image, filename):
     img_io = io.BytesIO()
-    image_small.save(img_io, 'JPEG')
+    resized_image.save(img_io, 'JPEG')
     img_io.seek(0)
-    fs.put(img_io, filename=filename, contentType="image/jpeg")
+    write_image_to_db(img_io, filename)
 
 
-def save_image_info(db, filename, small_filename, medium_filename, large_filename):
+def save_image_info(filename):
+    small_filename = generate_filename(filename, small_str)
+    medium_filename = generate_filename(filename, medium_str)
+    large_filename = generate_filename(filename, large_str)
     image = {"original_url": app_url + images_path + filename,
              "small_url": app_url + images_path + small_filename,
              "medium_url": app_url + images_path + medium_filename,
@@ -67,13 +79,13 @@ def save_image_info(db, filename, small_filename, medium_filename, large_filenam
     images.insert_one(image)
 
 
-def main():
+def generate_filename(filename, size_str):
+    return filename + "_" + size_str
 
 
-    write_images_to_disk()
-
-if __name__ == '__main__':
-    main()
+def get_all_images_from_db():
+    return db.images.find()
 
 
-
+def get_image_from_db(image_name):
+    return fs.get_last_version(filename=image_name)
