@@ -6,7 +6,7 @@ from PIL import Image
 import gridfs
 from pymongo import MongoClient
 
-small_dimension = 320, 320
+small_dimension = 320, 240
 medium_dimension = 384, 288
 large_dimension = 640, 480
 small_str = "small"
