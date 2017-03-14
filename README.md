@@ -33,6 +33,15 @@ python app.py
 
 Open <http://127.0.0.1:5000> when the app is up and running
 
+##Running tests
+
+Open terminal and run the following command:
+
+```
+python -m unittest -v TestSkyHub
+
+```
+
 ##Why Python (and flask)
 
 First of all I'm trying to improve my Python skills since my current main language (the one I use everyday in my job) is Java.
